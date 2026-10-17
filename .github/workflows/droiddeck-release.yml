@@ -1,0 +1,122 @@
+name: "Release XLCore for DroidDeck (ARM64)"
+
+on:
+  push:
+    branches: [droiddeck-arm64]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: droiddeck-release
+  cancel-in-progress: true
+
+jobs:
+  XLM:
+    runs-on: ubuntu-24.04-arm
+    # Debian bullseye: glibc 2.31, like DroidDeck's Debian.
+    container: rust:1-bullseye
+    steps:
+      - name: Checkout XLM
+        uses: actions/checkout@v4
+        with:
+          repository: PofMagicfingers/xlm
+          ref: droiddeck-aarch64
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Check glibc requirement
+        run: |
+          max=$(objdump -T target/release/xlm | grep -oE 'GLIBC_[0-9.]+' | sort -Vu | tail -1)
+          echo "Highest glibc symbol: $max"
+          [ "$(printf '%s\nGLIBC_2.31\n' "$max" | sort -V | tail -1)" = GLIBC_2.31 ]
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xlm
+          path: target/release/xlm
+
+  XLCore:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish (linux-arm64)
+        working-directory: ./src/XIVLauncher.Core/
+        run: dotnet publish -c Release -r linux-arm64 --self-contained -p:PublishSingleFile=false -p:BuildHash=arm64 -o "$GITHUB_WORKSPACE/stage"
+
+      - name: Bundle Debian trixie's glibc, libstdc++, OpenSSL and ICU
+        run: |
+          mkdir -p glibc
+          docker run --rm -v "$PWD/glibc:/out" debian:trixie sh -ec '
+            apt-get update -q && apt-get install -yq --no-install-recommends libssl3t64 libicu76 libstdc++6
+            cd /usr/lib/aarch64-linux-gnu
+            cp -L ld-linux-aarch64.so.1 libc.so.6 libm.so.6 libdl.so.2 libpthread.so.0 librt.so.1 \
+              libresolv.so.2 libutil.so.1 libanl.so.1 libmvec.so.1 libnss_dns.so.2 libnss_files.so.2 \
+              libgcc_s.so.1 libstdc++.so.6 libssl.so.3 libcrypto.so.3 \
+              libicudata.so.76 libicui18n.so.76 libicuuc.so.76 /out/'
+
+      - name: Package
+        run: |
+          mv stage/XIVLauncher.Core stage/XIVLauncher.Core.bin
+          cp droiddeck/XIVLauncher.Core stage/XIVLauncher.Core
+          # The loader sits next to the apphost so .NET finds its app directory via /proc/self/exe.
+          mv glibc/ld-linux-aarch64.so.1 stage/
+          mv glibc stage/glibc
+          cp -a droiddeck/proton-arm64 stage/
+          rm -f stage/*.pdb stage/*.xml stage/libsteam_api64.so
+          mkdir -p release
+          tar czf release/XIVLauncher.Core.tar.gz -C stage .
+          version="$(sed -n 's|.*<Version>\(.*\)</Version>.*|\1|p' src/XIVLauncher.Core/XIVLauncher.Core.csproj)-arm64.$(date -u +%Y%m%d%H%M)"
+          echo "$version" > release/version
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          cp droiddeck/install.sh release/
+
+      - name: aria2c (static aarch64 build)
+        run: |
+          curl -fsSL -o aria.zip https://github.com/abcfy2/aria2-static-build/releases/download/1.37.0/aria2-aarch64-linux-musl_static.zip
+          mkdir aria && unzip -q aria.zip -d aria
+          mv aria/aria2c aria/aria2c.bin
+          cp droiddeck/aria2c-wrapper aria/aria2c
+          chmod +x aria/aria2c aria/aria2c.bin
+          tar czf release/aria2c-arm64.tar.gz -C aria aria2c aria2c.bin
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xlcore
+          path: release/
+
+  Release:
+    needs: [XLM, XLCore]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mv xlm/xlm xlcore/xlm-aarch64
+          chmod +x xlcore/xlm-aarch64
+          version=$(cat xlcore/version)
+          gh release create "droiddeck-$version" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "DroidDeck ARM64 $version" --latest \
+            --notes "XIVLauncher.Core for linux-arm64, packaged for DroidDeck, with XLM for aarch64. Install from DroidDeck's desktop Konsole:
+
+          \`\`\`sh
+          curl -fsSL https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh | bash
+          \`\`\`
+
+          See [droiddeck/README.md](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/droiddeck/README.md)." \
+            xlcore/*
