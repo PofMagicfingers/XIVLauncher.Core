@@ -1,0 +1,8 @@
+#!/bin/sh
+# Starts the linux-arm64 XIVLauncher.Core with the glibc shipped next to it: its native libraries
+# (SDL3, cimgui) need a newer glibc than the system's. The loader sits in this folder so that the
+# .NET host, which finds itself through /proc/self/exe, still sees this folder as its own.
+dir=$(cd "$(dirname "$(readlink -f "$0")")" && pwd -P)
+# Android does not let .NET reserve its default 256 GiB of address space for the GC.
+export DOTNET_GCHeapHardLimit="${DOTNET_GCHeapHardLimit:-0xC0000000}"
+exec "$dir/ld-linux-aarch64.so.1" --library-path "$dir/glibc" --argv0 "$0" "$dir/XIVLauncher.Core.bin" "$@"

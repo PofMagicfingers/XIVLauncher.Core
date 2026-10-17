@@ -1,0 +1,35 @@
+#!/bin/bash
+# XIVLauncher.Core's "wine64": runs the command through DroidDeck's ARM64 Proton.
+here=$(dirname "$(readlink -f "$0")")
+. "$here/common.sh"
+
+# Proton installs and picks its own DXVK: drop XIVLauncher's d3d overrides.
+overrides=
+IFS=';' read -ra parts <<< "${WINEDLLOVERRIDES:-}"
+for part in "${parts[@]}"; do
+    case $part in *d3d*|*dxgi*) ;; "") ;; *) overrides="${overrides:+$overrides;}$part" ;; esac
+done
+if [ -n "$overrides" ]; then export WINEDLLOVERRIDES="$overrides"; else unset WINEDLLOVERRIDES; fi
+# XLM hands the Steam session's preloads over in XL_PRELOAD.
+[ -n "${XL_PRELOAD:-}" ] && [ -z "${LD_PRELOAD:-}" ] && export LD_PRELOAD="$XL_PRELOAD"
+[ -z "${LD_PRELOAD:-}" ] && unset LD_PRELOAD
+
+# Proton's steam.exe does not pass the program's stdout on, and XIVLauncher reads it. Paths are
+# converted here (Proton maps Z: to /); the injector, whose first line XIVLauncher reads, starts
+# without steam.exe; the game starts as Steam starts it; other helpers run straight in the prefix.
+if [ "${1:-}" = winepath ] && [ "${2:-}" = --windows ] && [ $# -eq 3 ]; then
+    printf 'Z:%s\n' "${3//\//\\}"
+    exit 0
+fi
+
+case "$*" in
+    *Dalamud.Injector.exe*)
+        export DROIDDECK_NO_STEAM=1
+        exec "$tool/droiddeck-proton" waitforexitandrun "$@"
+        ;;
+    *ffxiv_dx11.exe*)
+        exec "$tool/droiddeck-proton" waitforexitandrun "$@"
+        ;;
+esac
+
+exec "$tool/droiddeck-proton" runinprefix "$@"

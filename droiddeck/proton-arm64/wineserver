@@ -1,0 +1,9 @@
+#!/bin/bash
+# XIVLauncher.Core's "wineserver": the wineserver of DroidDeck's ARM64 Proton.
+here=$(dirname "$(readlink -f "$0")")
+. "$here/common.sh"
+for server in "$depot/files/bin-arm64/wineserver" "$depot/files/bin/wineserver"; do
+    [ -x "$server" ] && exec "$server" "$@"
+done
+echo "xlcore-proton: no wineserver in $depot" >&2
+exit 1

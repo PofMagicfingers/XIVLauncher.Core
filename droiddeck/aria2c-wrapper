@@ -1,0 +1,4 @@
+#!/bin/sh
+# aria2c for XIVLauncher in DroidDeck: c-ares, the static build's own resolver, gets no address there,
+# so name resolution goes through the system resolver.
+exec "$(dirname "$(readlink -f "$0")")/aria2c.bin" --async-dns=false "$@"
