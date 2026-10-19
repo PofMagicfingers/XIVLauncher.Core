@@ -3,13 +3,6 @@
 here=$(dirname "$(readlink -f "$0")")
 . "$here/common.sh"
 
-# Proton installs and picks its own DXVK: drop XIVLauncher's d3d overrides.
-overrides=
-IFS=';' read -ra parts <<< "${WINEDLLOVERRIDES:-}"
-for part in "${parts[@]}"; do
-    case $part in *d3d*|*dxgi*) ;; "") ;; *) overrides="${overrides:+$overrides;}$part" ;; esac
-done
-if [ -n "$overrides" ]; then export WINEDLLOVERRIDES="$overrides"; else unset WINEDLLOVERRIDES; fi
 # XLM hands the Steam session's preloads over in XL_PRELOAD.
 [ -n "${XL_PRELOAD:-}" ] && [ -z "${LD_PRELOAD:-}" ] && export LD_PRELOAD="$XL_PRELOAD"
 [ -z "${LD_PRELOAD:-}" ] && unset LD_PRELOAD

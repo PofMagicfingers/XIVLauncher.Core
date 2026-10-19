@@ -130,13 +130,12 @@ sealed class Program
         Config.GameModeEnabled ??= false;
 
         // On ARM64 the game runs through an ARM64 Proton with x64 emulation, reached through the
-        // wine64/wineserver wrappers shipped next to the launcher; Proton brings its own DXVK.
+        // wine64/wineserver wrappers shipped next to the launcher.
         var protonWrappers = Path.Combine(AppContext.BaseDirectory, "proton-arm64");
         if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64 && Directory.Exists(protonWrappers))
         {
             Config.WineStartupType ??= WineStartupType.Custom;
             Config.WineBinaryPath ??= protonWrappers;
-            Config.DxvkVersion ??= DxvkVersion.Disabled;
         }
 
         Config.DxvkVersion ??= DxvkVersion.Stable;

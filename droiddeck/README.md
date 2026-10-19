@@ -15,9 +15,8 @@ curl -fsSL https://github.com/PofMagicfingers/XIVLauncher.Core/releases/latest/d
 Then back in gaming mode, on FINAL FANTASY XIV (or the free trial): Properties > Compatibility >
 force "XLCore [XLM]", empty launch options.
 
-Status: the game runs in gaming mode. Not working yet: Dalamud (it crashes when hooking
-`IDXGISwapChain::Present` in Proton's ARM64EC DXVK), and XIVLauncher in DroidDeck's desktop session
-(`SDL_CreateGPUDevice(): No supported SDL_GPU backend found`).
+Status: the game runs in gaming mode. Not working yet: XIVLauncher in DroidDeck's desktop session
+(`SDL_CreateGPUDevice(): No supported SDL_GPU backend found`). Not tested yet: Dalamud with XIVLauncher's DXVK.
 
 ## Files
 
@@ -38,7 +37,8 @@ Status: the game runs in gaming mode. Not working yet: Dalamud (it crashes when 
 - XIVLauncher overwrites `SteamAppId`/`SteamGameId` with each id it tries to initialise Steam with
   (312060, the free trial, last). Gamescope only shows windows tagged with the id Steam launched,
   so the game stayed behind a black screen: both are reset to `STEAM_COMPAT_APP_ID`.
-- XIVLauncher's d3d overrides are dropped: Proton picks its own DXVK.
+- The game uses XIVLauncher's own DXVK (x64), as on x64: Dalamud hooks `IDXGISwapChain::Present`
+  by patching x86 code, which crashes in Proton's ARM64EC DXVK.
 
 ## Release contents
 
