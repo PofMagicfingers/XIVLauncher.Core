@@ -36,6 +36,9 @@ jobs:
       - name: Dotnet Build (Linux)
         run: dotnet publish -r linux-x64 --sc --configuration Release --no-restore -o ./dist/XIVLauncher.Core
 
+      - name: Dotnet Build (Linux ARM64)
+        run: dotnet publish -r linux-arm64 --sc --configuration Release -o ./dist/XIVLauncher.Core-arm64
+
       - name: Dotnet Build (Windows)
         run: dotnet publish -r win-x64 --sc --configuration Release -o ./dist/XIVLauncher.Core-win10x64
 
