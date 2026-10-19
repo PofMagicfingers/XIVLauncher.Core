@@ -1,0 +1,84 @@
+name: "Fork test release (linux-arm64)"
+
+# Test builds for DroidDeck from this fork, until the ARM64 builds are released upstream.
+
+on:
+  push:
+    branches: [droiddeck-arm64]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-release
+  cancel-in-progress: true
+
+jobs:
+  XLM:
+    runs-on: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: PofMagicfingers/xlm
+          ref: droiddeck-aarch64
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xlm
+          path: target/release/xlm
+
+  XLCore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Dotnet Build (Linux ARM64)
+        working-directory: ./src/XIVLauncher.Core/
+        run: dotnet publish -r linux-arm64 --sc --configuration Release -o ./dist/XIVLauncher.Core-arm64
+
+      - name: Package
+        run: |
+          mkdir -p release aria
+          tar -czf release/XIVLauncher.Core-arm64.tar.gz -C src/XIVLauncher.Core/dist/XIVLauncher.Core-arm64 .
+          # Name XLM looked for before it knew about ARM64.
+          cp release/XIVLauncher.Core-arm64.tar.gz release/XIVLauncher.Core.tar.gz
+          echo "$(sed -n 's|.*<Version>\(.*\)</Version>.*|\1|p' src/XIVLauncher.Core/XIVLauncher.Core.csproj)-arm64.$(date -u +%Y%m%d%H%M)" > release/version
+          cp .github/fork/install.sh release/
+          curl -fsSL -o aria.zip https://github.com/abcfy2/aria2-static-build/releases/download/1.37.0/aria2-aarch64-linux-musl_static.zip
+          unzip -q -p aria.zip aria2c > aria/aria2c.bin
+          cp .github/fork/aria2c aria/aria2c
+          chmod +x aria/aria2c aria/aria2c.bin
+          tar -czf release/aria2c-arm64.tar.gz -C aria aria2c aria2c.bin
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xlcore
+          path: release/
+
+  Release:
+    needs: [XLM, XLCore]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mv xlm/xlm xlcore/xlm-aarch64
+          version=$(cat xlcore/version)
+          gh release create "droiddeck-$version" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "DroidDeck ARM64 $version" --latest \
+            --notes "Test build of XIVLauncher.Core for linux-arm64 and XLM for aarch64, for DroidDeck. From DroidDeck's desktop Konsole: \`curl -fsSL https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh | bash\`" \
+            xlcore/*
