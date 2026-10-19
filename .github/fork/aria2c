@@ -1,0 +1,4 @@
+#!/bin/sh
+# Static aria2c with its own resolver (c-ares), which gets no address in DroidDeck: name resolution
+# goes through the system resolver. Until XIVLauncher passes --async-dns=false itself.
+exec "$(dirname "$(readlink -f "$0")")/aria2c.bin" --async-dns=false "$@"
