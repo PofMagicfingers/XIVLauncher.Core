@@ -53,7 +53,11 @@ public class SettingsTabWine : SettingsTab
             new SettingsEntry<string>(Strings.WineDebugAdditionalVarSetting, Strings.WineDebugAdditionalVarSettingDescription, () => Program.Config.WineDebugVars ?? string.Empty, s => Program.Config.WineDebugVars = s),
 
             // DXVK
-            dxvkVersionSetting = new SettingsEntry<DxvkVersion>(Strings.DXVKVersionSetting, Strings.DXVKVersionSettingDescription, () => Program.Config.DxvkVersion ?? DxvkVersion.Stable, x => Program.Config.DxvkVersion = x),
+            dxvkVersionSetting = new SettingsEntry<DxvkVersion>(Strings.DXVKVersionSetting, Strings.DXVKVersionSettingDescription, () => Program.Config.DxvkVersion ?? DxvkVersion.Stable, x => Program.Config.DxvkVersion = x)
+            {
+                // DroidDeck's Proton brings its own DXVK.
+                CheckVisibility = () => startupTypeSetting.Value != WineStartupType.DroidDeck
+            },
             new SettingsEntry<DxvkHudType>(Strings.EnableDXVKOverlaySetting, Strings.EnableDXVKOverlaySettingDescription, () => Program.Config.DxvkHudType, type => Program.Config.DxvkHudType = type),
             new SettingsEntry<bool>(Strings.DXVKEnableAsyncSetting, Strings.DXVKEnableAsyncSettingDescription, () => Program.Config.DxvkAsyncEnabled ?? true, b => Program.Config.DxvkAsyncEnabled = b)
             {

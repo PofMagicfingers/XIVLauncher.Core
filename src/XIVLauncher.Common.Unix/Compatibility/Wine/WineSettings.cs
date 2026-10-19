@@ -12,6 +12,9 @@ public enum WineStartupType
 
     [SettingsDescription("Custom", "Point XIVLauncher to a custom location containing WINE binaries to run the game with.")]
     Custom,
+
+    [SettingsDescription("DroidDeck", "Use DroidDeck's ARM64 Proton, which runs the game's x64 code with FEX - for DroidDeck on Android.")]
+    DroidDeck,
 }
 
 public enum WineManagedVersion

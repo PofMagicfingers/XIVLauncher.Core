@@ -694,6 +694,10 @@ public class MainPage : Page
 
                 Log.Information("Using Custom Wine: " + App.Settings.WineBinaryPath);
             }
+            else if (App.Settings.WineStartupType == WineStartupType.DroidDeck)
+            {
+                Log.Information("Using DroidDeck's Proton");
+            }
             else
             {
                 Log.Information("Using Managed Wine: " + App.Settings.WineManagedVersion.ToString());
