@@ -3,8 +3,9 @@ name: "Fork test release (linux-arm64)"
 # Test builds for DroidDeck from this fork. Each run takes the latest upstream releases of
 # XIVLauncher.Core and XLM, applies this fork's changes on top (the commits of droiddeck-arm64 here and
 # of droiddeck-aarch64 in PofMagicfingers/xlm, without the ones touching only .github/ or README.md),
-# builds them, and publishes a release unless one already exists for the same sources. A commit that
-# no longer applies fails the run, and the previous release stays.
+# builds them, and publishes a release unless one was already tagged for the same sources. A commit
+# that no longer applies fails the run, and the previous release stays. To withdraw a broken build,
+# delete its release but keep its tag: XLM goes back to the previous release on the next launch.
 
 on:
   push:
@@ -46,7 +47,8 @@ jobs:
           xlm_fork=$(gh api "repos/$XLM_FORK/commits/$XLM_FORK_BRANCH" -q .sha)
           release_tag="droiddeck-$xlcore_tag-${xlcore_fork:0:7}-xlm-$xlm_tag-${xlm_fork:0:7}"
           build=true
-          if gh release view -R "$GITHUB_REPOSITORY" "$release_tag" >/dev/null 2>&1; then build=false; fi
+          # The tag stays when a broken release is deleted, so that build is not published again.
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$release_tag" >/dev/null 2>&1; then build=false; fi
           echo "XIVLauncher.Core $xlcore_tag + $xlcore_fork, XLM $xlm_tag + $xlm_fork: $release_tag (build: $build)"
           {
             echo "xlcore_tag=$xlcore_tag"
