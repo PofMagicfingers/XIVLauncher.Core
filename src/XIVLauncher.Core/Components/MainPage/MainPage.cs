@@ -576,8 +576,8 @@ public class MainPage : Page
         }
         catch (IDalamudCompatibilityCheck.ArchitectureNotSupportedException ex)
         {
-            Log.Error(ex, "Architecture not supported");
-            throw;
+            Log.Warning(ex, "Architecture not supported, starting the game without Dalamud");
+            forceNoDalamud = true;
         }
 
         if (App.Settings.DalamudEnabled.GetValueOrDefault(true) && !forceNoDalamud)

@@ -28,7 +28,9 @@ public class UnixDalamudCompatibilityCheck : IDalamudCompatibilityCheck
                 throw new IDalamudCompatibilityCheck.ArchitectureNotSupportedException("Dalamud is not supported on ARM32.");
 
             case Architecture.Arm64:
-                throw new IDalamudCompatibilityCheck.ArchitectureNotSupportedException("x64 emulation was not detected. Please make sure to run XIVLauncher with x64 emulation.");
+                // Under an ARM64 Wine (ARM64EC), DXVK runs as native ARM64 code, and Dalamud's hook on
+                // IDXGISwapChain::Present writes x64 code into it: the game dies on an illegal instruction.
+                throw new IDalamudCompatibilityCheck.ArchitectureNotSupportedException("Dalamud is not supported on ARM64 yet.");
         }
     }
 }
