@@ -75,7 +75,7 @@ public class UnixDalamudRunner : IDalamudRunner
         launchArguments.Add("--");
         launchArguments.Add(gameArgs);
 
-        var dalamudProcess = compatibility.RunInPrefix(string.Join(" ", launchArguments), environment: environment, redirectOutput: true, writeLog: true);
+        var dalamudProcess = compatibility.RunInPrefix(string.Join(" ", launchArguments), environment: environment, redirectOutput: true, writeLog: true, gameLaunch: true);
         var output = dalamudProcess.StandardOutput.ReadLine();
 
         if (output == null)

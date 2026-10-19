@@ -28,8 +28,11 @@ public class CompatibilityTools
     private string WineBinPath => Settings.StartupType == WineStartupType.Managed ?
                                     Path.Combine(wineDirectory.FullName, Settings.Release.Name, "bin") :
                                     Settings.CustomBinPath;
-    private string Wine64Path => Path.Combine(WineBinPath, "wine64");
-    private string WineServerPath => Path.Combine(WineBinPath, "wineserver");
+    private string Wine64Path => droidDeck?.Launcher ?? Path.Combine(WineBinPath, "wine64");
+    private string WineServerPath => droidDeck?.WineServer ?? Path.Combine(WineBinPath, "wineserver");
+
+    /// <summary>DroidDeck's Proton, which brings its own DXVK, when the game runs through it.</summary>
+    private readonly DroidDeck droidDeck;
 
     private readonly DxvkVersion dxvkVersion;
     private readonly DxvkHudType hudType;
@@ -66,6 +69,9 @@ public class CompatibilityTools
 
         this.logWriter = new StreamWriter(wineSettings.LogFile.FullName);
 
+        if (wineSettings.StartupType == WineStartupType.DroidDeck)
+            this.droidDeck = DroidDeck.Find() ?? throw new InvalidOperationException("DroidDeck's ARM64 Proton was not found. Start Steam in DroidDeck once so it installs it.");
+
         if (wineSettings.StartupType == WineStartupType.Managed)
         {
             if (!this.wineDirectory.Exists)
@@ -87,7 +93,8 @@ public class CompatibilityTools
         }
 
         EnsurePrefix();
-        await Dxvk.Dxvk.InstallDxvk(httpClient, Settings.Prefix, dxvkDirectory, dxvkVersion).ConfigureAwait(false);
+        if (droidDeck == null)
+            await Dxvk.Dxvk.InstallDxvk(httpClient, Settings.Prefix, dxvkDirectory, dxvkVersion).ConfigureAwait(false);
 
         IsToolReady = true;
     }
@@ -110,23 +117,27 @@ public class CompatibilityTools
         RunInPrefix("cmd /c dir %userprofile%/Documents > nul").WaitForExit();
     }
 
-    public Process RunInPrefix(string command, string workingDirectory = "", IDictionary<string, string> environment = null, bool redirectOutput = false, bool writeLog = false, bool wineD3D = false)
+    /// <param name="gameLaunch">Whether the command starts the game, directly or through Dalamud's injector.</param>
+    public Process RunInPrefix(string command, string workingDirectory = "", IDictionary<string, string> environment = null, bool redirectOutput = false, bool writeLog = false, bool wineD3D = false, bool gameLaunch = false)
     {
         var psi = new ProcessStartInfo(Wine64Path);
-        psi.Arguments = command;
+        psi.Arguments = droidDeck == null ? command : $"{DroidDeck.Verb(gameLaunch, redirectOutput).Verb} {command}";
 
-        Log.Verbose("Running in prefix: {FileName} {Arguments}", psi.FileName, command);
-        return RunInPrefix(psi, workingDirectory, environment, redirectOutput, writeLog, wineD3D);
+        Log.Verbose("Running in prefix: {FileName} {Arguments}", psi.FileName, psi.Arguments);
+        return RunInPrefix(psi, workingDirectory, environment, redirectOutput, writeLog, wineD3D, gameLaunch);
     }
 
-    public Process RunInPrefix(string[] args, string workingDirectory = "", IDictionary<string, string> environment = null, bool redirectOutput = false, bool writeLog = false, bool wineD3D = false)
+    /// <param name="gameLaunch">Whether the command starts the game, directly or through Dalamud's injector.</param>
+    public Process RunInPrefix(string[] args, string workingDirectory = "", IDictionary<string, string> environment = null, bool redirectOutput = false, bool writeLog = false, bool wineD3D = false, bool gameLaunch = false)
     {
         var psi = new ProcessStartInfo(Wine64Path);
+        if (droidDeck != null)
+            psi.ArgumentList.Add(DroidDeck.Verb(gameLaunch, redirectOutput).Verb);
         foreach (var arg in args)
             psi.ArgumentList.Add(arg);
 
         Log.Verbose("Running in prefix: {FileName} {Arguments}", psi.FileName, psi.ArgumentList.Aggregate(string.Empty, (a, b) => a + " " + b));
-        return RunInPrefix(psi, workingDirectory, environment, redirectOutput, writeLog, wineD3D);
+        return RunInPrefix(psi, workingDirectory, environment, redirectOutput, writeLog, wineD3D, gameLaunch);
     }
 
     private void MergeDictionaries(StringDictionary a, IDictionary<string, string> b)
@@ -143,7 +154,7 @@ public class CompatibilityTools
         }
     }
 
-    private Process RunInPrefix(ProcessStartInfo psi, string workingDirectory, IDictionary<string, string> environment, bool redirectOutput, bool writeLog, bool wineD3D)
+    private Process RunInPrefix(ProcessStartInfo psi, string workingDirectory, IDictionary<string, string> environment, bool redirectOutput, bool writeLog, bool wineD3D, bool gameLaunch)
     {
         psi.RedirectStandardOutput = redirectOutput;
         psi.RedirectStandardError = writeLog;
@@ -157,6 +168,16 @@ public class CompatibilityTools
             { "WINEPREFIX", Settings.Prefix.FullName },
             { "WINEDLLOVERRIDES", $"{WINEDLLOVERRIDES}{(ogl ? "b" : "n,b")}" }
         };
+
+        if (droidDeck != null)
+        {
+            // Proton picks its own DXVK: leave the d3d DLLs to it.
+            wineEnviromentVariables["WINEDLLOVERRIDES"] = WINEDLLOVERRIDES.Split(";d3d9")[0];
+            foreach (var variable in droidDeck.ProtonEnvironment(Settings.Prefix))
+                wineEnviromentVariables[variable.Key] = variable.Value;
+            if (DroidDeck.Verb(gameLaunch, redirectOutput).WithoutSteam)
+                wineEnviromentVariables["DROIDDECK_NO_STEAM"] = "1";
+        }
 
         if (!string.IsNullOrEmpty(Settings.DebugVars))
         {
@@ -251,6 +272,9 @@ public class CompatibilityTools
 
     public string UnixToWinePath(string unixPath)
     {
+        if (droidDeck != null)
+            return DroidDeck.ToWindowsPath(unixPath);
+
         var launchArguments = new string[] { "winepath", "--windows", unixPath };
         var winePath = RunInPrefix(launchArguments, redirectOutput: true);
         var output = winePath.StandardOutput.ReadToEnd();

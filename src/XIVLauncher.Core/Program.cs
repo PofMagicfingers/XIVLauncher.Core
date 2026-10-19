@@ -131,7 +131,7 @@ sealed class Program
         Config.DxvkVersion ??= DxvkVersion.Stable;
         Config.DxvkAsyncEnabled ??= true;
 
-        Config.WineStartupType ??= WineStartupType.Managed;
+        Config.WineStartupType ??= DroidDeck.Find() != null ? WineStartupType.DroidDeck : WineStartupType.Managed;
         Config.WineManagedVersion ??= WineManagedVersion.Stable;
         Config.WineSyncType ??= WineUtility.SystemFsyncSupport() == FsyncSupport.Supported ? WineSyncType.FSync : WineSyncType.ESync;
         Config.WineBinaryPath ??= "/usr/bin";

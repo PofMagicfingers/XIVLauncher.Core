@@ -38,7 +38,7 @@ public class UnixGameRunner : IGameRunner
         }
         else
         {
-            return compatibility.RunInPrefix($"\"{path}\" {arguments}", workingDirectory, environment, writeLog: true);
+            return compatibility.RunInPrefix($"\"{path}\" {arguments}", workingDirectory, environment, writeLog: true, gameLaunch: true);
         }
     }
 }
