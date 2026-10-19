@@ -13,7 +13,7 @@
         <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
 
         <IsOSX Condition="'$(RuntimeIdentifier)' == 'osx-x64'">true</IsOSX>
-        <IsLinux Condition="'$(RuntimeIdentifier)' == 'linux-x64'">true</IsLinux>
+        <IsLinux Condition="'$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64'">true</IsLinux>
     </PropertyGroup>
 
     <PropertyGroup>
