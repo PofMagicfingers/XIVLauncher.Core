@@ -12,10 +12,17 @@ trap 'rm -rf "$tmp"' EXIT
 curl --fail -L "$RELEASE/xlm-aarch64" -o "$tmp/xlm"
 chmod +x "$tmp/xlm"
 
+# Keep the user's XLM pre- and post-launch scripts across reinstalls.
+keep=$(mktemp -d)
+for hooks in prelaunch.d postlaunch.d; do
+    [ -d "$COMPAT/XLM/$hooks" ] && cp -a "$COMPAT/XLM/$hooks" "$keep/"
+done
 rm -rf "$COMPAT/XLM"
 mkdir -p "$COMPAT"
 "$tmp/xlm" install-steam-tool --xlm-updater-disable \
     --extra-launch-args="--run-as-steam-compat-tool=true --use-fallback-secret-provider --xlcore-web-release-url $RELEASE/ --aria-source url:$RELEASE/aria2c-arm64.tar.gz" \
     --steam-compat-path "$COMPAT/"
+cp -a "$keep"/. "$COMPAT/XLM/"
+rm -rf "$keep"
 
 echo "Done. Back in gaming mode, on FINAL FANTASY XIV: Properties > Compatibility > force \"XLCore [XLM]\"."
