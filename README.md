@@ -1,6 +1,17 @@
 ![xlcore_sized](https://user-images.githubusercontent.com/16760685/197423373-b6082cdb-dc1f-46db-8768-3f507f182ba8.png)
 
 # XIVLauncher.Core  [![Discord Shield](https://discordapp.com/api/guilds/581875019861328007/widget.png?style=shield)](https://discord.gg/3NMcUV5)
+
+> **About this fork.** This branch is an example of XIVLauncher.Core running natively on ARM64 in
+> [DroidDeck](https://github.com/Droid-Deck/DroidDeck) (Steam on Android): a `linux-arm64` build, a
+> "DroidDeck" Wine setup running the game through DroidDeck's ARM64 Proton, and a fix for the Steam
+> app id the game gets when Steam can't be initialised. Dalamud is skipped on ARM64. It was written
+> with an AI assistant, so it is not submitted upstream: goatcorp does not accept AI-authored
+> contributions. Test builds, with XLM for aarch64, are in this fork's
+> [releases](https://github.com/PofMagicfingers/XIVLauncher.Core/releases/latest); install from
+> DroidDeck's desktop terminal:
+> `curl -fsSL https://github.com/PofMagicfingers/XIVLauncher.Core/releases/latest/download/install.sh | bash`
+
 Cross-platform version of XIVLauncher, optimized for Steam Deck. Comes with a version of [WINE tuned for FFXIV](https://github.com/goatcorp/wine-xiv-git).
 
 ## Using on Steam Deck
