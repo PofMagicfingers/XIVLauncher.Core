@@ -1,10 +1,16 @@
 name: "Fork test release (linux-arm64)"
 
-# Test builds for DroidDeck from this fork, until the ARM64 builds are released upstream.
+# Test builds for DroidDeck from this fork. Each run takes the latest upstream releases of
+# XIVLauncher.Core and XLM, applies this fork's changes on top (the commits of droiddeck-arm64 here and
+# of droiddeck-aarch64 in PofMagicfingers/xlm, without the ones touching only .github/ or README.md),
+# builds them, and publishes a release unless one already exists for the same sources. A commit that
+# no longer applies fails the run, and the previous release stays.
 
 on:
   push:
     branches: [droiddeck-arm64]
+  schedule:
+    - cron: "17 5 * * *"
   workflow_dispatch:
 
 permissions:
@@ -12,16 +18,65 @@ permissions:
 
 concurrency:
   group: fork-release
-  cancel-in-progress: true
+  cancel-in-progress: false
+
+env:
+  XLCORE_UPSTREAM: goatcorp/XIVLauncher.Core
+  XLCORE_FORK_BRANCH: droiddeck-arm64
+  XLM_UPSTREAM: Blooym/xlm
+  XLM_FORK: PofMagicfingers/xlm
+  XLM_FORK_BRANCH: droiddeck-aarch64
 
 jobs:
+  Sources:
+    runs-on: ubuntu-latest
+    outputs:
+      xlcore_tag: ${{ steps.sources.outputs.xlcore_tag }}
+      xlm_tag: ${{ steps.sources.outputs.xlm_tag }}
+      release_tag: ${{ steps.sources.outputs.release_tag }}
+      build: ${{ steps.sources.outputs.build }}
+    steps:
+      - id: sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          xlcore_tag=$(gh release view -R "$XLCORE_UPSTREAM" --json tagName -q .tagName)
+          xlm_tag=$(gh release view -R "$XLM_UPSTREAM" --json tagName -q .tagName)
+          xlcore_fork=$(gh api "repos/$GITHUB_REPOSITORY/commits/$XLCORE_FORK_BRANCH" -q .sha)
+          xlm_fork=$(gh api "repos/$XLM_FORK/commits/$XLM_FORK_BRANCH" -q .sha)
+          release_tag="droiddeck-$xlcore_tag-${xlcore_fork:0:7}-xlm-$xlm_tag-${xlm_fork:0:7}"
+          build=true
+          if gh release view -R "$GITHUB_REPOSITORY" "$release_tag" >/dev/null 2>&1; then build=false; fi
+          echo "XIVLauncher.Core $xlcore_tag + $xlcore_fork, XLM $xlm_tag + $xlm_fork: $release_tag (build: $build)"
+          {
+            echo "xlcore_tag=$xlcore_tag"
+            echo "xlm_tag=$xlm_tag"
+            echo "release_tag=$release_tag"
+            echo "build=$build"
+          } >> "$GITHUB_OUTPUT"
+
   XLM:
+    needs: Sources
+    if: needs.Sources.outputs.build == 'true'
     runs-on: ubuntu-22.04-arm
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: PofMagicfingers/xlm
-          ref: droiddeck-aarch64
+          repository: ${{ env.XLM_UPSTREAM }}
+          ref: ${{ needs.Sources.outputs.xlm_tag }}
+          fetch-depth: 0
+
+      - name: Apply this fork's changes
+        run: |
+          git fetch -q "https://github.com/$XLM_FORK" "+$XLM_FORK_BRANCH:fork"
+          git fetch -q origin "+main:upstream-main"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for commit in $(git rev-list --reverse "$(git merge-base fork upstream-main)..fork"); do
+            [ -n "$(git show --name-only --format= "$commit" | grep -v -e '^\.github/' -e '^README\.md$')" ] || continue
+            git cherry-pick -x "$commit"
+          done
+          git log --oneline -8
 
       - name: Build
         run: cargo build --release --locked
@@ -32,12 +87,31 @@ jobs:
           path: target/release/xlm
 
   XLCore:
+    needs: Sources
+    if: needs.Sources.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: ${{ env.XLCORE_UPSTREAM }}
+          ref: ${{ needs.Sources.outputs.xlcore_tag }}
           submodules: true
           fetch-depth: 0
+
+      - name: Apply this fork's changes
+        run: |
+          git fetch -q "https://github.com/$GITHUB_REPOSITORY" "+$XLCORE_FORK_BRANCH:fork"
+          git fetch -q origin "+main:upstream-main"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for commit in $(git rev-list --reverse "$(git merge-base fork upstream-main)..fork"); do
+            [ -n "$(git show --name-only --format= "$commit" | grep -v -e '^\.github/' -e '^README\.md$')" ] || continue
+            git cherry-pick -x "$commit"
+          done
+          git submodule update --init --recursive
+          git log --oneline -8
+          # The fork's own files: install script and aria2c wrapper.
+          git checkout fork -- .github/fork
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -53,7 +127,7 @@ jobs:
           tar -czf release/XIVLauncher.Core-arm64.tar.gz -C src/XIVLauncher.Core/dist/XIVLauncher.Core-arm64 .
           # Name XLM looked for before it knew about ARM64.
           cp release/XIVLauncher.Core-arm64.tar.gz release/XIVLauncher.Core.tar.gz
-          echo "$(sed -n 's|.*<Version>\(.*\)</Version>.*|\1|p' src/XIVLauncher.Core/XIVLauncher.Core.csproj)-arm64.$(date -u +%Y%m%d%H%M)" > release/version
+          echo "${{ needs.Sources.outputs.xlcore_tag }}-arm64.$(date -u +%Y%m%d%H%M)" > release/version
           cp .github/fork/install.sh release/
           curl -fsSL -o aria.zip https://github.com/abcfy2/aria2-static-build/releases/download/1.37.0/aria2-aarch64-linux-musl_static.zip
           unzip -q -p aria.zip aria2c > aria/aria2c.bin
@@ -67,7 +141,7 @@ jobs:
           path: release/
 
   Release:
-    needs: [XLM, XLCore]
+    needs: [Sources, XLM, XLCore]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -75,10 +149,12 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.Sources.outputs.release_tag }}
+          XLCORE_TAG: ${{ needs.Sources.outputs.xlcore_tag }}
+          XLM_TAG: ${{ needs.Sources.outputs.xlm_tag }}
         run: |
           mv xlm/xlm xlcore/xlm-aarch64
-          version=$(cat xlcore/version)
-          gh release create "droiddeck-$version" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "DroidDeck ARM64 $version" --latest \
-            --notes "Test build of XIVLauncher.Core for linux-arm64 and XLM for aarch64, for DroidDeck. From DroidDeck's desktop Konsole: \`curl -fsSL https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh | bash\`" \
+          gh release create "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "DroidDeck ARM64: XIVLauncher.Core $XLCORE_TAG, XLM $XLM_TAG" --latest \
+            --notes "Test build for DroidDeck: XIVLauncher.Core $XLCORE_TAG for linux-arm64 and XLM $XLM_TAG for aarch64, with this fork's changes. From DroidDeck's desktop terminal: \`curl -fsSL https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh | bash\`" \
             xlcore/*
