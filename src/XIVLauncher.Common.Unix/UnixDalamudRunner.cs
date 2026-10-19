@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using Serilog;
 
@@ -28,6 +30,9 @@ public class UnixDalamudRunner : IDalamudRunner
 
     public Process? Run(FileInfo runner, bool fakeLogin, bool noPlugins, bool noThirdPlugins, FileInfo gameExe, string gameArgs, IDictionary<string, string> environment, DalamudLoadMethod loadMethod, DalamudStartInfo startInfo)
     {
+        if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+            UseVTableSwapChainHook(startInfo.ConfigurationPath);
+
         var gameExePath = "";
         var dotnetRuntimePath = "";
 
@@ -113,6 +118,32 @@ public class UnixDalamudRunner : IDalamudRunner
         {
             Log.Error(ex, $"Couldn't parse Dalamud output: {output}");
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Under an ARM64 Wine (ARM64EC), DXVK runs as native ARM64 code. Dalamud's default swap chain hook
+    /// writes x64 code into IDXGISwapChain::Present, which then dies on an illegal instruction; its
+    /// vtable hook only swaps the method's pointer, and the call reaches Dalamud through the emulator.
+    /// </summary>
+    private static void UseVTableSwapChainHook(string configurationPath)
+    {
+        // Dalamud's SwapChainHelper.HookMode: 0 is ByteCode, 1 is VTable.
+        const int vtableHookMode = 1;
+
+        try
+        {
+            var config = File.Exists(configurationPath) ? JObject.Parse(File.ReadAllText(configurationPath)) : new JObject();
+            if (config.Value<int?>("SwapChainHookMode") == vtableHookMode)
+                return;
+
+            config["SwapChainHookMode"] = vtableHookMode;
+            File.WriteAllText(configurationPath, config.ToString(Formatting.Indented));
+            Log.Information("[DALAMUD] Using the vtable swap chain hook on ARM64");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[DALAMUD] Could not set the vtable swap chain hook");
         }
     }
 }

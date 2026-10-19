@@ -28,7 +28,9 @@ public class UnixDalamudCompatibilityCheck : IDalamudCompatibilityCheck
                 throw new IDalamudCompatibilityCheck.ArchitectureNotSupportedException("Dalamud is not supported on ARM32.");
 
             case Architecture.Arm64:
-                throw new IDalamudCompatibilityCheck.ArchitectureNotSupportedException("x64 emulation was not detected. Please make sure to run XIVLauncher with x64 emulation.");
+                // The game and Dalamud run as x64 code, emulated by an ARM64 Wine (ARM64EC); see
+                // UnixDalamudRunner for what Dalamud needs there.
+                break;
         }
     }
 }
