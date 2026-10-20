@@ -80,6 +80,10 @@ jobs:
           done
           git log --oneline -8
 
+      # The exact source of the published binary (AGPL-3.0): the upstream tag with this fork's changes.
+      - name: Source archive
+        run: tar --exclude=.git -czf "$RUNNER_TEMP/xlm-source.tar.gz" --transform 's,^\.,xlm,' .
+
       - name: Build
         run: cargo build --release --locked
 
@@ -87,6 +91,11 @@ jobs:
         with:
           name: xlm
           path: target/release/xlm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xlm-source
+          path: ${{ runner.temp }}/xlm-source.tar.gz
 
   XLCore:
     needs: Sources
@@ -115,6 +124,10 @@ jobs:
           # The fork's own files: install script and aria2c wrapper.
           git checkout fork -- .github/fork
 
+      # The exact source of the published build (GPL-3.0), submodules included.
+      - name: Source archive
+        run: tar --exclude=.git -czf "$RUNNER_TEMP/XIVLauncher.Core-source.tar.gz" --transform 's,^\.,XIVLauncher.Core,' .
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
@@ -134,8 +147,10 @@ jobs:
           curl -fsSL -o aria.zip https://github.com/abcfy2/aria2-static-build/releases/download/1.37.0/aria2-aarch64-linux-musl_static.zip
           unzip -q -p aria.zip aria2c > aria/aria2c.bin
           cp .github/fork/aria2c aria/aria2c
+          cp .github/fork/aria2/build_info.md .github/fork/aria2/COPYING aria/
           chmod +x aria/aria2c aria/aria2c.bin
-          tar -czf release/aria2c-arm64.tar.gz -C aria aria2c aria2c.bin
+          tar -czf release/aria2c-arm64.tar.gz -C aria aria2c aria2c.bin build_info.md COPYING
+          cp "$RUNNER_TEMP/XIVLauncher.Core-source.tar.gz" release/
 
       - uses: actions/upload-artifact@v4
         with:
@@ -156,7 +171,8 @@ jobs:
           XLM_TAG: ${{ needs.Sources.outputs.xlm_tag }}
         run: |
           mv xlm/xlm xlcore/xlm-aarch64
+          mv xlm-source/xlm-source.tar.gz xlcore/
           gh release create "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "DroidDeck ARM64: XIVLauncher.Core $XLCORE_TAG, XLM $XLM_TAG" --latest \
-            --notes "Test build for DroidDeck: XIVLauncher.Core $XLCORE_TAG for linux-arm64 and XLM $XLM_TAG for aarch64, with this fork's changes. From DroidDeck's desktop terminal: \`curl -fsSL https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh | bash\`" \
+            --notes "Test build for DroidDeck: XIVLauncher.Core $XLCORE_TAG for linux-arm64 and XLM $XLM_TAG for aarch64, with this fork's changes. From DroidDeck's desktop terminal: \`curl -fsSL https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh | bash\`. The source of these builds is attached (XIVLauncher.Core-source.tar.gz, GPL-3.0; xlm-source.tar.gz, AGPL-3.0); aria2c's license and sources are in aria2c-arm64.tar.gz." \
             xlcore/*
